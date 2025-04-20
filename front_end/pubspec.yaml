@@ -1,0 +1,18 @@
+name: front_end
+description: A new Flutter project
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+  velocity_x: ^4.1.1
+  http: ^0.13.6
+  shared_preferences: ^2.2.2
+  jwt_decoder: ^2.0.1
+  flutter_slidable: ^3.0.0
+
+flutter:
+  uses-material-design: true
