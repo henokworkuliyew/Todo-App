@@ -7,8 +7,8 @@ import 'config.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 class Dashboard extends StatefulWidget {
-  final token;
-  const Dashboard({@required this.token, Key? key}) : super(key: key);
+  final String token;
+  const Dashboard({required this.token, Key? key}) : super(key: key);
 
   @override
   State<Dashboard> createState() => _DashboardState();
@@ -16,16 +16,20 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   late String userId;
-  TextEditingController _todoTitle = TextEditingController();
-  TextEditingController _todoDesc = TextEditingController();
-  List? items;
+  final TextEditingController _todoTitle = TextEditingController();
+  final TextEditingController _todoDesc = TextEditingController();
+  List<dynamic>? items;
 
   @override
   void initState() {
     super.initState();
-    Map<String, dynamic> jwtDecodedToken = JwtDecoder.decode(widget.token);
-    userId = jwtDecodedToken['_id'];
-    getTodoList(userId);
+    try {
+      Map<String, dynamic> jwtDecodedToken = JwtDecoder.decode(widget.token);
+      userId = jwtDecodedToken['_id'];
+      getTodoList(userId);
+    } catch (e) {
+      print("JWT Decode error: $e");
+    }
   }
 
   void addTodo() async {
@@ -36,50 +40,73 @@ class _DashboardState extends State<Dashboard> {
         "desc": _todoDesc.text,
       };
 
-      var response = await http.post(
-        Uri.parse(addtodo),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(regBody),
-      );
+      try {
+        var response = await http.post(
+          Uri.parse(addtodo),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(regBody),
+        );
 
-      var jsonResponse = jsonDecode(response.body);
-
-      if (jsonResponse['status']) {
-        _todoDesc.clear();
-        _todoTitle.clear();
-        Navigator.pop(context);
-        getTodoList(userId);
+        if (response.statusCode == 200) {
+          final jsonResponse = jsonDecode(response.body);
+          if (jsonResponse['status']) {
+            _todoDesc.clear();
+            _todoTitle.clear();
+            Navigator.pop(context);
+            getTodoList(userId);
+          } else {
+            print("AddTodo failed: ${jsonResponse['message']}");
+          }
+        } else {
+          print("HTTP Error: ${response.statusCode}");
+        }
+      } catch (e) {
+        print("Error adding todo: $e");
       }
     }
   }
 
-  void getTodoList(userId) async {
+  void getTodoList(String userId) async {
     var regBody = {"userId": userId};
 
-    var response = await http.post(
-      Uri.parse(getToDoList),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(regBody),
-    );
+    try {
+      var response = await http.post(
+        Uri.parse(getToDoList),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(regBody),
+      );
 
-    var jsonResponse = jsonDecode(response.body);
-    items = jsonResponse['success'];
-
-    setState(() {});
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        setState(() {
+          items = jsonResponse['success'] ?? [];
+        });
+      } else {
+        print("Failed to load list: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error getting todo list: $e");
+    }
   }
 
-  void deleteItem(id) async {
+  void deleteItem(String id) async {
     var regBody = {"id": id};
 
-    var response = await http.post(
-      Uri.parse(deleteTodo),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(regBody),
-    );
+    try {
+      var response = await http.post(
+        Uri.parse(deleteTodo),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(regBody),
+      );
 
-    var jsonResponse = jsonDecode(response.body);
-    if (jsonResponse['status']) {
-      getTodoList(userId);
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['status']) {
+          getTodoList(userId);
+        }
+      }
+    } catch (e) {
+      print("Delete error: $e");
     }
   }
 
@@ -107,11 +134,14 @@ class _DashboardState extends State<Dashboard> {
                 ),
                 SizedBox(height: 10.0),
                 Text(
-                  'ToDo with NodeJS + Mongodb',
+                  'ToDo with NodeJS + MongoDB',
                   style: TextStyle(fontSize: 30.0, fontWeight: FontWeight.w700),
                 ),
                 SizedBox(height: 8.0),
-                Text('5 Task', style: TextStyle(fontSize: 20)),
+                Text(
+                  '${items?.length ?? 0} Task(s)',
+                  style: TextStyle(fontSize: 20),
+                ),
               ],
             ),
           ),
@@ -128,14 +158,14 @@ class _DashboardState extends State<Dashboard> {
                 padding: const EdgeInsets.all(8.0),
                 child:
                     items == null
-                        ? null
+                        ? Center(child: CircularProgressIndicator())
                         : ListView.builder(
                           itemCount: items!.length,
                           itemBuilder: (context, int index) {
                             return Slidable(
-                              key: const ValueKey(0),
+                              key: ValueKey(items![index]['_id']),
                               endActionPane: ActionPane(
-                                motion: const ScrollMotion(),
+                                motion: ScrollMotion(),
                                 dismissible: DismissiblePane(
                                   onDismissed: () {},
                                 ),
@@ -157,7 +187,7 @@ class _DashboardState extends State<Dashboard> {
                                   leading: Icon(Icons.task),
                                   title: Text('${items![index]['title']}'),
                                   subtitle: Text('${items![index]['desc']}'),
-                                  trailing: Icon(Icons.arrow_back),
+                                  trailing: Icon(Icons.arrow_forward_ios),
                                 ),
                               ),
                             );
@@ -206,10 +236,10 @@ class _DashboardState extends State<Dashboard> {
                   hintText: "Description",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.all(Radius.circular(10.0)),
-                  ),      
+                  ),
                 ),
               ).p4().px8(),
-              ElevatedButton(onPressed: () => addTodo(), child: Text("Add")),
+              ElevatedButton(onPressed: addTodo, child: Text("Add")),
             ],
           ),
         );
